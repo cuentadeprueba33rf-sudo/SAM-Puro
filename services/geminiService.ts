@@ -52,10 +52,7 @@ export const generateImage = async ({
 
     } catch (error) {
         console.error("Error al generar la imagen:", error);
-        if (error instanceof Error) {
-            throw new Error("No se pudo generar la imagen. " + error.message);
-        }
-        throw new Error("Ocurrió un error desconocido al generar la imagen.");
+        throw new Error("Error de conexión al generar la imagen. Por favor, revisa tu conexión e inténtalo de nuevo.");
     }
 };
 
