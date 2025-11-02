@@ -26,34 +26,24 @@ const ImageGenInput: React.FC<{
     onModeAction: (mode: ModeID, accept?: string) => void;
     onResetMode: () => void;
 }> = ({ onSend, disabled, attachment, onRemoveAttachment, onModeAction, onResetMode }) => {
-    const [prompt, setPrompt] = useState('');
-
-    const handleSendClick = () => {
-        if (!disabled && (prompt.trim() || attachment)) {
-            onSend(prompt, attachment || undefined);
-            setPrompt('');
-        }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendClick();
-        }
-    };
-
     return (
-        <div className="bg-surface-primary dark:bg-[#1E1F20] p-3 rounded-2xl border border-border-subtle shadow-lg w-full transition-all relative">
+        <div className="bg-surface-primary dark:bg-[#1E1F20] p-3 rounded-2xl border border-border-subtle shadow-lg w-full transition-all relative group">
+            <div className="absolute inset-0 bg-surface-primary/70 dark:bg-bg-main/70 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-4 rounded-2xl">
+                <PhotoIcon className="w-10 h-10 text-text-secondary mb-3"/>
+                <h3 className="font-semibold text-text-main text-center">Función en entrenamiento</h3>
+                <p className="text-text-secondary text-center text-sm">La IA no puede generar imágenes por ahora. Vuelve a intentarlo más tarde.</p>
+            </div>
+            
             <button
                 onClick={onResetMode}
-                className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-surface-secondary transition-colors z-10"
+                className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-surface-secondary transition-colors z-30"
                 aria-label="Salir del modo imagen"
             >
                 <XMarkIcon className="w-5 h-5 text-text-secondary" />
             </button>
             <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
-                    <button className="flex items-center gap-2 font-semibold text-text-main p-2 rounded-lg bg-surface-secondary">
+                    <button disabled className="flex items-center gap-2 font-semibold text-text-main p-2 rounded-lg bg-surface-secondary">
                         <span>Imágenes</span>
                         <ChevronDownIcon className="w-4 h-4 text-text-secondary"/>
                     </button>
@@ -63,44 +53,32 @@ const ImageGenInput: React.FC<{
                     <span className="text-sm font-medium">Flash Image</span>
                     <div className="w-px h-4 bg-border-subtle"></div>
                     <span className="text-sm font-medium">x1</span>
-                    <button className="p-1 rounded-full hover:bg-surface-secondary">
+                    <button disabled className="p-1 rounded-full hover:bg-surface-secondary">
                         <AdjustmentsHorizontalIcon className="w-5 h-5"/>
                     </button>
                 </div>
             </div>
 
             <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={attachment ? "Describe los cambios que quieres hacer..." : "Genera una imagen con texto..."}
+                value=""
+                placeholder="La generación de imágenes está en entrenamiento..."
                 className="w-full bg-transparent resize-none outline-none text-text-main my-3 text-lg placeholder:text-text-secondary"
                 rows={2}
-                disabled={disabled}
+                disabled={true}
             />
 
             <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                    {attachment ? (
-                        <div className="relative">
-                            <img src={attachment.data} alt="Source" className="w-16 h-16 rounded-lg object-cover"/>
-                            <button onClick={onRemoveAttachment} className="absolute -top-1 -right-1 bg-danger text-white rounded-full p-0.5">
-                                <XMarkIcon className="w-3 h-3"/>
-                            </button>
-                        </div>
-                    ) : (
-                        <button 
-                            onClick={() => onModeAction('photo_upload', 'image/*')}
-                            className="w-16 h-16 bg-surface-secondary rounded-lg flex items-center justify-center text-text-secondary hover:bg-border-subtle transition-colors"
-                        >
-                            <PlusIcon className="w-8 h-8"/>
-                        </button>
-                    )}
+                    <button 
+                        disabled
+                        className="w-16 h-16 bg-surface-secondary rounded-lg flex items-center justify-center text-text-secondary transition-colors"
+                    >
+                        <PlusIcon className="w-8 h-8"/>
+                    </button>
                 </div>
                 <button
-                    onClick={handleSendClick}
-                    disabled={disabled || (!prompt.trim() && !attachment)}
-                    className="w-12 h-12 flex items-center justify-center bg-surface-secondary text-text-main rounded-xl transition-colors disabled:opacity-50 enabled:hover:bg-border-subtle self-end"
+                    disabled={true}
+                    className="w-12 h-12 flex items-center justify-center bg-surface-secondary text-text-main rounded-xl transition-colors disabled:opacity-50 self-end"
                     aria-label="Generate image"
                 >
                     <ArrowUpIcon className="w-6 h-6" />

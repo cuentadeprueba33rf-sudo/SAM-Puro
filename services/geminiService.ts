@@ -21,39 +21,8 @@ export const generateImage = async ({
     prompt: string;
     attachment?: Attachment;
 }): Promise<Attachment> => {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
-    try {
-        const parts: any[] = [{ text: prompt }];
-        if (attachment) {
-            const imagePart = await fileToGenerativePart(attachment);
-            parts.unshift(imagePart);
-        }
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: { parts: parts },
-            config: {
-                responseModalities: [Modality.IMAGE],
-            },
-        });
-        
-        for (const part of response.candidates[0].content.parts) {
-            if (part.inlineData) {
-                const base64ImageBytes: string = part.inlineData.data;
-                const mimeType = part.inlineData.mimeType;
-                return {
-                    name: 'generated-image.png',
-                    type: mimeType,
-                    data: `data:${mimeType};base64,${base64ImageBytes}`,
-                };
-            }
-        }
-        throw new Error("No se generó ninguna imagen.");
-
-    } catch (error) {
-        console.error("Error al generar la imagen:", error);
-        throw new Error("Error de conexión al generar la imagen. Por favor, revisa tu conexión e inténtalo de nuevo.");
-    }
+    console.warn("La generación de imágenes está actualmente desactivada para entrenamiento.");
+    throw new Error("La IA no puede generar imágenes ahora, está en entrenamiento. Vuelve a intentarlo más tarde.");
 };
 
 
