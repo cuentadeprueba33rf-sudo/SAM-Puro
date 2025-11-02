@@ -84,7 +84,7 @@ const App: React.FC = () => {
     const [currentMode, setCurrentMode] = useState<ModeID>('normal');
     const [attachment, setAttachment] = useState<Attachment | null>(null);
     const [selectedModel, setSelectedModel] = useState<ModelType>('sm-i1');
-    const [activeArtifact, setActiveArtifact] = useState<Artifact | null>(null);
+    const [activeProject, setActiveProject] = useState<Artifact[] | null>(null);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isUpdatesModalOpen, setIsUpdatesModalOpen] = useState(false);
     const [isMathConsoleOpen, setIsMathConsoleOpen] = useState(false);
@@ -93,6 +93,7 @@ const App: React.FC = () => {
     const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
     const [captureMode, setCaptureMode] = useState<'user' | 'environment'>('user');
     const [showFeatureNotification, setShowFeatureNotification] = useState(false);
+
 
     const abortControllerRef = useRef<AbortController | null>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -258,7 +259,7 @@ const App: React.FC = () => {
             return newChats;
         });
     };
-    
+
     const startEssayGeneration = async (topic: string, chatId: string, messageId: string, structure: 'classic' | 'standard') => {
         if (abortControllerRef.current?.signal.aborted) return;
         
@@ -362,13 +363,44 @@ const App: React.FC = () => {
         setIsGenerating(false);
     }
 
+    const getUserLocation = (): Promise<{ latitude: number; longitude: number; }> => {
+        return new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+                reject(new Error("La geolocalización no es compatible con tu navegador."));
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (position) => resolve({
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                }),
+                (error) => {
+                    let errorMessage = "No se pudo obtener la ubicación. ";
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += "Has denegado el permiso.";
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += "La información de ubicación no está disponible.";
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += "La solicitud de ubicación ha caducado.";
+                            break;
+                        default:
+                            errorMessage += "Ocurrió un error desconocido.";
+                            break;
+                    }
+                    reject(new Error(errorMessage));
+                }
+            );
+        });
+    };
 
     const handleSendMessage = async (prompt: string, attachedFile?: Attachment) => {
         if (!currentChatId || isGenerating) return;
         
         shouldAutoScrollRef.current = true;
 
-        // Make temporary chat permanent on first message
         if (currentChat?.isTemporary) {
             setChats(prev => prev.map(c => c.id === currentChatId ? {...c, isTemporary: false} : c));
         }
@@ -433,7 +465,7 @@ const App: React.FC = () => {
             timestamp: Date.now(),
             mode: currentMode,
             generatingArtifact: currentMode === 'canvasdev',
-            isSearching: currentMode === 'search',
+            isSearching: ['search', 'maps'].includes(currentMode),
             consoleLogs: currentMode === 'math' ? [`[INFO] Math mode activated. Verifying prompt...`] : undefined,
         };
         
@@ -444,9 +476,22 @@ const App: React.FC = () => {
         setChats(prev => prev.map(c => c.id === currentChatId ? {...c, messages: [...c.messages, samMessage]} : c));
         
         const originalMode = currentMode;
+        let userLocation: { latitude: number; longitude: number; } | undefined;
         
+        if (originalMode === 'maps') {
+            const locationMsgId = addLocalMessage(currentChatId, { author: MessageAuthor.SAM, text: 'Obteniendo tu ubicación...', timestamp: Date.now() });
+            try {
+                userLocation = await getUserLocation();
+                updateLocalMessage(currentChatId, locationMsgId, { text: `Buscando cerca de tu ubicación...`});
+            } catch (error) {
+                updateLocalMessage(currentChatId, locationMsgId, { text: (error as Error).message, author: MessageAuthor.SYSTEM });
+                setIsGenerating(false);
+                return;
+            }
+        }
+
         setAttachment(null);
-        if (['image', 'document', 'image_generation'].includes(currentMode)) {
+        if (['image', 'document', 'image_generation', 'maps'].includes(currentMode)) {
             setCurrentMode('normal');
         }
 
@@ -482,6 +527,7 @@ const App: React.FC = () => {
             history,
             mode: originalMode,
             modelName,
+            latLng: userLocation,
             onUpdate: (chunk) => {
                 setChats(prevChats => {
                     return prevChats.map(chat => {
@@ -499,18 +545,25 @@ const App: React.FC = () => {
                 });
             },
             onComplete: (fullText, groundingChunks) => {
-                const ARTIFACT_REGEX = /```(\w+)\s*(?:([\w.-]+))?\n([\s\S]+?)```/;
-                const match = ARTIFACT_REGEX.exec(fullText);
-                let newArtifact: Artifact | undefined;
+                const ARTIFACT_REGEX = /```(\w+)\s*(?:([\w.-]+))?\n([\s\S]+?)```/g;
+                const matches = [...fullText.matchAll(ARTIFACT_REGEX)];
+                const newArtifacts: Artifact[] = [];
                 let finalText = fullText;
 
-                if (originalMode === 'canvasdev' && match) {
-                    const [, language, filepath, code] = match;
-                    newArtifact = { id: uuidv4(), title: filepath || `artifact.${language}`, filepath: filepath || `artifact.${language}`, code: code.trim(), language };
-                    finalText = "He creado un componente interactivo para ti. Puedes verlo en la vista previa.";
+                if (originalMode === 'canvasdev' && matches.length > 0) {
+                    matches.forEach(match => {
+                        const [, language, filepath, code] = match;
+                        newArtifacts.push({ id: uuidv4(), title: filepath || `artifact.${language}`, filepath: filepath || `artifact.${language}`, code: code.trim(), language });
+                    });
+                    
+                    if (newArtifacts.length > 1) {
+                        finalText = "He creado un proyecto con varios archivos para ti. Puedes explorarlo en el Canvas.";
+                    } else if (newArtifacts.length === 1) {
+                         finalText = "He creado un componente interactivo para ti. Puedes verlo en la vista previa.";
+                    }
                 }
 
-                updateLocalMessage(currentChatId, samMessageId, { text: finalText, groundingMetadata: groundingChunks, artifacts: newArtifact ? [newArtifact] : undefined, generatingArtifact: false, isSearching: false });
+                updateLocalMessage(currentChatId, samMessageId, { text: finalText, groundingMetadata: groundingChunks, artifacts: newArtifacts.length > 0 ? newArtifacts : undefined, generatingArtifact: false, isSearching: false });
 
                 if (messages.length < 2 && currentChat?.title === "Nuevo chat") {
                     const newTitle = prompt.substring(0, 40) + (prompt.length > 40 ? '...' : '');
@@ -549,7 +602,7 @@ const App: React.FC = () => {
                 addLocalMessage(currentChatId, {
                     author: MessageAuthor.SAM,
                     prelude: 'Modo Canvas Dev Activado',
-                    text: "Puedo generar componentes interactivos con HTML, CSS y JavaScript. Describe lo que quieres construir. Por ejemplo: <em>'Crea un formulario de inicio de sesión con un botón de pulso'</em>.",
+                    text: "Puedo generar componentes interactivos y proyectos con HTML, CSS y JavaScript. Describe lo que quieres construir. Por ejemplo: <em>'Crea un formulario de inicio de sesión con un botón de pulso'</em>.",
                     timestamp: Date.now(),
                 });
             }
@@ -611,7 +664,7 @@ const App: React.FC = () => {
             return (
                 <div className="flex items-center gap-3 text-text-secondary animate-pulse">
                     <GlobeAltIcon className="w-5 h-5 animate-spin-slow" />
-                    <span className="font-medium">Buscando en la web...</span>
+                    <span className="font-medium">Buscando...</span>
                 </div>
             );
         }
@@ -688,31 +741,29 @@ const App: React.FC = () => {
                                             </div>
                                         )}
                                         {isGenerating && msg.id === messages[messages.length -1]?.id && !msg.text && !msg.generatingArtifact && !msg.isSearching && msg.mode !== 'math' && msg.mode !== 'image_generation' && <div className="typing-indicator"><span></span><span></span><span></span></div>}
-                                        {msg.artifacts && (
-                                            <div className="mt-3 space-y-2">
-                                                {msg.artifacts.map(artifact => (
-                                                    <div key={artifact.id} className="bg-surface-secondary p-3 rounded-xl border border-border-subtle max-w-md w-full">
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <CodeBracketIcon className="w-5 h-5 text-accent flex-shrink-0" />
-                                                            <span className="font-semibold text-text-main text-sm truncate">{artifact.title}</span>
-                                                        </div>
-                                                        <div className="bg-black/50 rounded-md p-2 max-h-32 overflow-hidden relative">
-                                                            <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap">
-                                                                <code>
-                                                                    {artifact.code.split('\n').slice(0, 5).join('\n')}
-                                                                    {artifact.code.split('\n').length > 5 ? '\n...' : ''}
-                                                                </code>
-                                                            </pre>
-                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent pointer-events-none"></div>
-                                                        </div>
-                                                        <button 
-                                                            onClick={() => setActiveArtifact(artifact)}
-                                                            className="mt-3 w-full bg-accent text-white font-semibold py-2 px-3 rounded-lg text-sm hover:opacity-90 transition-opacity"
-                                                        >
-                                                            Abrir en Canvas
-                                                        </button>
+                                        {msg.artifacts && msg.artifacts.length > 0 && (
+                                            <div className="mt-3">
+                                                <div className="bg-surface-secondary p-3 rounded-xl border border-border-subtle max-w-md w-full">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <CodeBracketIcon className="w-5 h-5 text-accent flex-shrink-0" />
+                                                        <span className="font-semibold text-text-main text-sm">
+                                                            {msg.artifacts.length > 1 ? 'Proyecto Generado' : msg.artifacts[0].title}
+                                                        </span>
                                                     </div>
-                                                ))}
+                                                    {msg.artifacts.length > 1 && (
+                                                        <ul className="pl-5 space-y-1 list-disc text-sm text-text-secondary my-2">
+                                                            {msg.artifacts.map(artifact => (
+                                                                <li key={artifact.id} className="font-mono text-xs">{artifact.filepath}</li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                    <button 
+                                                        onClick={() => setActiveProject(msg.artifacts ?? null)}
+                                                        className="mt-2 w-full bg-accent text-white font-semibold py-2 px-3 rounded-lg text-sm hover:opacity-90 transition-opacity"
+                                                    >
+                                                        Abrir en Canvas
+                                                    </button>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -743,7 +794,7 @@ const App: React.FC = () => {
                 </footer>
             </div>
 
-            {activeArtifact && <CodeCanvas artifact={activeArtifact} onClose={() => setActiveArtifact(null)} />}
+            {activeProject && <CodeCanvas artifacts={activeProject} onClose={() => setActiveProject(null)} />}
             <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} settings={settings} onSave={handleSaveSettings} onClearHistory={() => {}} />
             <UpdatesModal isOpen={isUpdatesModalOpen} onClose={() => setIsUpdatesModalOpen(false)} />
             {contextMenu && <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)}><ContextMenu x={contextMenu.coords.x} y={contextMenu.coords.y} onClose={() => setContextMenu(null)} onRename={() => { const chat = chats.find(c => c.id === contextMenu.chatId); const newTitle = prompt("Enter new chat title:", chat?.title); if (newTitle && newTitle.trim()) { handleRenameChat(contextMenu.chatId, newTitle.trim()); } }} onDelete={() => { if (window.confirm("Are you sure you want to delete this chat?")) { handleDeleteChat(contextMenu.chatId); } }} /></div>}

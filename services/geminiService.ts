@@ -37,6 +37,7 @@ interface StreamGenerateContentParams {
     onComplete: (fullText: string, groundingChunks?: any[]) => void;
     onError: (error: Error) => void;
     abortSignal: AbortSignal;
+    latLng?: { latitude: number; longitude: number; };
 }
 
 export const streamGenerateContent = async ({
@@ -50,6 +51,7 @@ export const streamGenerateContent = async ({
     onComplete,
     onError,
     abortSignal,
+    latLng,
 }: StreamGenerateContentParams) => {
     const ai = new GoogleGenAI({ apiKey: API_KEY });
     try {
@@ -82,6 +84,15 @@ export const streamGenerateContent = async ({
             config.tools = [{googleSearch: {}}];
         }
 
+        if (mode === 'maps') {
+            config.tools = [{googleMaps: {}}, {googleSearch: {}}];
+            if (latLng) {
+                config.toolConfig = {
+                    retrievalConfig: { latLng }
+                };
+            }
+        }
+
         const resultStream = await ai.models.generateContentStream({
             model: modelName,
             contents: contents,
@@ -110,16 +121,13 @@ export const streamGenerateContent = async ({
         }
         
         if (!abortSignal.aborted) {
-            // Sanitize grounding chunks to prevent circular structure errors when saving to localStorage.
             const sanitizedGroundingChunks = rawGroundingChunks
                 .map(chunk => {
                     if (chunk.web) {
-                        return {
-                            web: {
-                                uri: chunk.web.uri,
-                                title: chunk.web.title,
-                            },
-                        };
+                        return { web: { uri: chunk.web.uri, title: chunk.web.title } };
+                    }
+                    if (chunk.maps) {
+                        return { maps: { uri: chunk.maps.uri, title: chunk.maps.title } };
                     }
                     return null;
                 })

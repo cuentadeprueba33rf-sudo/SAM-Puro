@@ -2,6 +2,7 @@
   "name": "SAM IA",
   "description": "Una interfaz de chat de IA avanzada para productividad, desarrollo y análisis, con modos de operación especializados e integración con Gemini.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "geolocation"
   ]
 }
