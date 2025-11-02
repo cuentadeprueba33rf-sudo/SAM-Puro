@@ -688,7 +688,33 @@ const App: React.FC = () => {
                                             </div>
                                         )}
                                         {isGenerating && msg.id === messages[messages.length -1]?.id && !msg.text && !msg.generatingArtifact && !msg.isSearching && msg.mode !== 'math' && msg.mode !== 'image_generation' && <div className="typing-indicator"><span></span><span></span><span></span></div>}
-                                        {msg.artifacts && <div className="mt-2">{msg.artifacts.map(artifact => <button key={artifact.id} onClick={() => setActiveArtifact(artifact)} className="bg-surface-secondary hover:bg-border-subtle text-text-main font-medium py-2 px-3 rounded-lg inline-flex items-center gap-2 text-sm"><CodeBracketIcon className="w-5 h-5" /><span>{artifact.title}</span></button>)}</div>}
+                                        {msg.artifacts && (
+                                            <div className="mt-3 space-y-2">
+                                                {msg.artifacts.map(artifact => (
+                                                    <div key={artifact.id} className="bg-surface-secondary p-3 rounded-xl border border-border-subtle max-w-md w-full">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <CodeBracketIcon className="w-5 h-5 text-accent flex-shrink-0" />
+                                                            <span className="font-semibold text-text-main text-sm truncate">{artifact.title}</span>
+                                                        </div>
+                                                        <div className="bg-black/50 rounded-md p-2 max-h-32 overflow-hidden relative">
+                                                            <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap">
+                                                                <code>
+                                                                    {artifact.code.split('\n').slice(0, 5).join('\n')}
+                                                                    {artifact.code.split('\n').length > 5 ? '\n...' : ''}
+                                                                </code>
+                                                            </pre>
+                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent pointer-events-none"></div>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => setActiveArtifact(artifact)}
+                                                            className="mt-3 w-full bg-accent text-white font-semibold py-2 px-3 rounded-lg text-sm hover:opacity-90 transition-opacity"
+                                                        >
+                                                            Abrir en Canvas
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                     {msg.author === MessageAuthor.SAM && !msg.prelude && (msg.text || (msg.groundingMetadata && msg.groundingMetadata.length > 0)) && !isGenerating && !msg.generatingArtifact && <MessageActions text={msg.text || ''} groundingMetadata={msg.groundingMetadata} />}
                                 </div>

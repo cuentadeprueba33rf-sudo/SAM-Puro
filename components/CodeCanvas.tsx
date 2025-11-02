@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Artifact } from '../types';
-import { XMarkIcon, DocumentDuplicateIcon, WindowIcon, DevicePhoneMobileIcon, DeviceTabletIcon, ComputerDesktopIcon, InformationCircleIcon, CodeBracketIcon, CheckIcon } from './icons';
+import { XMarkIcon, DocumentDuplicateIcon, WindowIcon, DevicePhoneMobileIcon, DeviceTabletIcon, ComputerDesktopIcon, InformationCircleIcon, CodeBracketIcon, CheckIcon, PencilSquareIcon, Bars3Icon } from './icons';
 
 const highlightCode = (code: string, language: string) => {
   if (language !== 'html') {
@@ -36,7 +36,7 @@ const highlightCode = (code: string, language: string) => {
 };
 
 const DeviceFrame: React.FC<{ viewport: 'desktop' | 'tablet' | 'mobile', children: React.ReactNode }> = ({ viewport, children }) => {
-    const baseClasses = "bg-white shadow-2xl rounded-lg transition-all duration-300 ease-in-out flex flex-col";
+    const baseClasses = "bg-white shadow-2xl rounded-lg transition-all duration-300 ease-in-out flex flex-col drop-shadow-2xl";
     const frameStyles = {
         mobile: "w-[375px] h-[667px] border-8 border-black rounded-[40px] p-2",
         tablet: "w-[768px] h-[1024px] border-[14px] border-black rounded-[24px] p-2",
@@ -144,7 +144,7 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
                     </div>
                 )}
                 {view === 'preview' && (
-                    <div className="h-full w-full flex items-center justify-center bg-grid p-4 overflow-auto">
+                    <div className="h-full w-full flex items-center justify-center canvas-backdrop p-4 overflow-auto">
                         <DeviceFrame viewport={viewport}>
                              <iframe
                                 srcDoc={artifact.code}
@@ -156,18 +156,35 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
                     </div>
                 )}
                 {view === 'info' && (
-                    <div className="h-full w-full flex items-center justify-center p-8">
-                        <div className="max-w-lg w-full bg-surface-primary p-8 rounded-lg border border-border-subtle">
-                             <h3 className="text-2xl font-bold text-text-main flex items-center gap-3 mb-6">
+                    <div className="h-full w-full flex items-center justify-center p-8 canvas-backdrop">
+                        <div className="max-w-2xl w-full bg-surface-primary/80 backdrop-blur-lg p-8 rounded-2xl border border-border-subtle shadow-lg">
+                             <h3 className="text-2xl font-bold text-text-main flex items-center gap-3 mb-8">
                                 <InformationCircleIcon className="w-8 h-8 text-accent"/>
                                 <span>Detalles del Artefacto</span>
                              </h3>
-                             <div className="space-y-4 text-text-secondary">
-                                <div className="flex justify-between items-center"><span className="font-semibold">Título:</span> <span className="font-mono bg-surface-secondary px-2 py-1 rounded">{artifact.title}</span></div>
-                                <div className="flex justify-between items-center"><span className="font-semibold">Lenguaje:</span> <span className="font-mono bg-surface-secondary px-2 py-1 rounded">{artifact.language}</span></div>
-                                <div className="flex justify-between items-center"><span className="font-semibold">Líneas de código:</span> <span className="font-mono bg-surface-secondary px-2 py-1 rounded">{lineNumbers.length}</span></div>
+                             <div className="space-y-4">
+                                <div className="bg-surface-secondary p-4 rounded-lg flex items-start gap-4">
+                                    <PencilSquareIcon className="w-6 h-6 text-accent mt-1 flex-shrink-0" />
+                                    <div>
+                                        <h4 className="font-semibold text-text-main">Título</h4>
+                                        <p className="text-text-secondary font-mono text-sm">{artifact.title}</p>
+                                    </div>
+                                </div>
+                                <div className="bg-surface-secondary p-4 rounded-lg flex items-start gap-4">
+                                    <CodeBracketIcon className="w-6 h-6 text-accent mt-1 flex-shrink-0" />
+                                    <div>
+                                        <h4 className="font-semibold text-text-main">Lenguaje</h4>
+                                        <p className="text-text-secondary font-mono text-sm uppercase">{artifact.language}</p>
+                                    </div>
+                                </div>
+                                <div className="bg-surface-secondary p-4 rounded-lg flex items-start gap-4">
+                                    <Bars3Icon className="w-6 h-6 text-accent mt-1 flex-shrink-0" />
+                                    <div>
+                                        <h4 className="font-semibold text-text-main">Líneas de Código</h4>
+                                        <p className="text-text-secondary font-mono text-sm">{lineNumbers.length}</p>
+                                    </div>
+                                </div>
                              </div>
-                             <p className="text-sm text-text-secondary mt-8">Este artefacto fue generado por SAM para ser visualizado e interactuado dentro de este entorno de desarrollo.</p>
                         </div>
                     </div>
                 )}
@@ -202,12 +219,16 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
             .code-view::-webkit-scrollbar-track { background: transparent; }
             .code-view::-webkit-scrollbar-thumb { background-color: var(--color-border-subtle); border-radius: 20px; border: 2px solid transparent; background-clip: content-box; }
             .code-view::-webkit-scrollbar-thumb:hover { background-color: var(--color-text-secondary); }
-            .bg-grid {
+            .canvas-backdrop {
                 background-color: var(--color-bg-main);
                 background-image:
-                    linear-gradient(var(--color-border-subtle) 1px, transparent 1px),
-                    linear-gradient(to right, var(--color-border-subtle) 1px, transparent 1px);
-                background-size: 20px 20px;
+                    radial-gradient(at 0% 0%, hsla(241, 60%, 53%, 0.15) 0px, transparent 50%),
+                    radial-gradient(at 100% 100%, hsla(241, 60%, 53%, 0.1) 0px, transparent 50%);
+            }
+            .dark .canvas-backdrop {
+                background-image:
+                    radial-gradient(at 0% 0%, hsla(241, 60%, 53%, 0.2) 0px, transparent 50%),
+                    radial-gradient(at 100% 100%, hsla(241, 60%, 53%, 0.15) 0px, transparent 50%);
             }
             /* Syntax Highlighting */
             .token.comment { color: var(--token-comment); }
