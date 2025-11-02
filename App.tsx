@@ -97,7 +97,8 @@ const App: React.FC = () => {
     const abortControllerRef = useRef<AbortController | null>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    
+    const shouldAutoScrollRef = useRef(true);
+
     // Initial load effects
     useEffect(() => {
         const name = localStorage.getItem('sam_ia_guest_name');
@@ -168,18 +169,6 @@ const App: React.FC = () => {
         document.documentElement.className = settings.theme;
     }, [settings]);
     
-    useEffect(() => {
-        if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-        }
-    }, [chats, currentChatId]);
-    
-    useEffect(() => {
-        if(currentMode === 'math') {
-            setIsMathConsoleOpen(true);
-        }
-    }, [currentMode]);
-
     const currentChat = useMemo(() => {
         return chats.find(c => c.id === currentChatId);
     }, [chats, currentChatId]);
@@ -187,6 +176,33 @@ const App: React.FC = () => {
     const messages = useMemo(() => {
         return currentChat?.messages || [];
     }, [currentChat]);
+
+    // Smart scroll effect
+    useEffect(() => {
+        const el = chatContainerRef.current;
+        const handleScroll = () => {
+            if (el) {
+                const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 10;
+                shouldAutoScrollRef.current = isAtBottom;
+            }
+        };
+        el?.addEventListener('scroll', handleScroll);
+        // On new chat, always scroll to bottom
+        shouldAutoScrollRef.current = true;
+        return () => el?.removeEventListener('scroll', handleScroll);
+    }, [currentChatId]);
+
+    useEffect(() => {
+        if (chatContainerRef.current && shouldAutoScrollRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+    }, [messages]);
+    
+    useEffect(() => {
+        if(currentMode === 'math') {
+            setIsMathConsoleOpen(true);
+        }
+    }, [currentMode]);
 
     const addLocalMessage = (chatId: string, message: Omit<ChatMessage, 'id'>): string => {
         const newMessageId = uuidv4();
@@ -243,7 +259,7 @@ const App: React.FC = () => {
         });
     };
     
-    const startEssayGeneration = async (topic: string, chatId: string, messageId: string) => {
+    const startEssayGeneration = async (topic: string, chatId: string, messageId: string, structure: 'classic' | 'standard') => {
         if (abortControllerRef.current?.signal.aborted) return;
         
         const extractJson = (text: string) => {
@@ -270,10 +286,16 @@ const App: React.FC = () => {
                 return chat;
             }));
         };
+        
+        let outlinePrompt = `Generate an outline for the topic: "${topic}"`;
+        if (structure === 'classic') {
+            outlinePrompt = `Generate a detailed outline for an essay on the topic: "${topic}", structured with three main sections: 'Introducción', 'Desarrollo', and 'Conclusión'.`
+        }
+
 
         // 1. Generate Outline
         await streamGenerateContent({
-            prompt: `Generate an outline for the topic: "${topic}"`,
+            prompt: outlinePrompt,
             systemInstruction,
             history: [],
             mode: 'essay',
@@ -304,6 +326,7 @@ const App: React.FC = () => {
                             mode: 'essay',
                             modelName: selectedModel === 'sm-i1' ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
                             onUpdate: (chunk) => {
+                                shouldAutoScrollRef.current = false; // Allow user to scroll freely during generation
                                 currentContent[section.title] = (currentContent[section.title] || '') + chunk;
                                 updateEssayState({ content: { ...currentContent } });
                             },
@@ -342,6 +365,8 @@ const App: React.FC = () => {
 
     const handleSendMessage = async (prompt: string, attachedFile?: Attachment) => {
         if (!currentChatId || isGenerating) return;
+        
+        shouldAutoScrollRef.current = true;
 
         // Make temporary chat permanent on first message
         if (currentChat?.isTemporary) {
@@ -353,9 +378,26 @@ const App: React.FC = () => {
         abortControllerRef.current = new AbortController();
 
         const lastMessage = messages[messages.length - 1];
-        if(lastMessage?.text.includes('Por favor, introduce el tema para tu ensayo.')) {
+        
+        const essayStructurePrompts = [
+            "Elegí la estructura de Inicio, Nudo y Desenlace.",
+            "Elegí el formato académico estándar."
+        ];
+
+        if (essayStructurePrompts.includes(prompt)) {
             addLocalMessage(currentChatId, { author: MessageAuthor.USER, text: prompt, timestamp: Date.now() });
-            updateLocalMessage(currentChatId, lastMessage.id, { text: `Comenzando la redacción del ensayo sobre: *"${prompt}"*` });
+            addLocalMessage(currentChatId, {
+                author: MessageAuthor.SAM,
+                text: 'Excelente. Ahora, por favor, introduce el tema para tu ensayo.',
+                timestamp: Date.now(),
+            });
+            setIsGenerating(false);
+            return;
+        }
+
+        if(lastMessage?.text.includes('introduce el tema para tu ensayo.')) {
+            addLocalMessage(currentChatId, { author: MessageAuthor.USER, text: prompt, timestamp: Date.now() });
+            updateLocalMessage(currentChatId, lastMessage.id, { text: `Comenzando la redacción del ensayo sobre: *"${prompt}"*`, options: [] });
             
             const essayMessageId = addLocalMessage(currentChatId, {
                 author: MessageAuthor.SAM,
@@ -369,7 +411,9 @@ const App: React.FC = () => {
                     status: 'outlining',
                 },
             });
-            await startEssayGeneration(prompt, currentChatId, essayMessageId);
+            const secondLastUserMessage = messages.filter(m => m.author === MessageAuthor.USER).slice(-1)[0];
+            const structure = secondLastUserMessage?.text.includes("Inicio, Nudo y Desenlace") ? 'classic' : 'standard';
+            await startEssayGeneration(prompt, currentChatId, essayMessageId, structure);
             return;
         }
 
@@ -489,8 +533,12 @@ const App: React.FC = () => {
         if (mode.actionType === 'modal' && mode.id === 'essay') {
             addLocalMessage(currentChatId, {
                 author: MessageAuthor.SAM,
-                text: 'Por favor, introduce el tema para tu ensayo.',
+                text: '¡Claro! Puedo ayudarte a crear un ensayo. ¿Qué estructura prefieres?',
                 timestamp: Date.now(),
+                options: [
+                    { text: "Inicio, Nudo y Desenlace", prompt: "Elegí la estructura de Inicio, Nudo y Desenlace." },
+                    { text: "Formato Académico Estándar", prompt: "Elegí el formato académico estándar." }
+                ]
             });
             return;
         }
@@ -611,7 +659,7 @@ const App: React.FC = () => {
                         </div>
                     ) : (
                     <div className="space-y-6">
-                        {messages.map(msg => (
+                        {messages.map((msg, index) => (
                             msg.essayContent ? (
                                 <EssayCard key={msg.id} essay={msg.essayContent} />
                             ) : (
@@ -625,6 +673,20 @@ const App: React.FC = () => {
                                         {msg.prelude && <div className="flex items-center gap-2 mb-2 text-text-main"><CodeBracketIcon className="w-5 h-5 text-accent"/><p className="font-semibold text-sm">{msg.prelude}</p></div>}
                                         {msg.attachment && (msg.attachment.type.startsWith('image/') ? <img src={msg.attachment.data} alt={msg.attachment.name} className="max-w-xs max-h-48 rounded-lg mb-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImage(msg.attachment)}/> : <div className="mb-2 p-3 bg-surface-secondary rounded-lg flex items-center gap-3 text-text-main max-w-xs"><DocumentIcon className="w-6 h-6 text-text-secondary flex-shrink-0" /><span className="text-sm truncate">{msg.attachment.name}</span></div>)}
                                         {(msg.text || msg.generatingArtifact || msg.isSearching || (msg.mode === 'math' && !msg.text) || (msg.mode === 'image_generation' && !msg.attachment)) && renderMessageContent(msg)}
+                                        {msg.options && (
+                                            <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                                                {msg.options.map(opt => (
+                                                    <button
+                                                        key={opt.text}
+                                                        onClick={() => handleSendMessage(opt.prompt)}
+                                                        disabled={isGenerating || msg.id !== messages[messages.length - 1]?.id}
+                                                        className="px-4 py-2 bg-accent text-white font-semibold rounded-lg text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {opt.text}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                         {isGenerating && msg.id === messages[messages.length -1]?.id && !msg.text && !msg.generatingArtifact && !msg.isSearching && msg.mode !== 'math' && msg.mode !== 'image_generation' && <div className="typing-indicator"><span></span><span></span><span></span></div>}
                                         {msg.artifacts && <div className="mt-2">{msg.artifacts.map(artifact => <button key={artifact.id} onClick={() => setActiveArtifact(artifact)} className="bg-surface-secondary hover:bg-border-subtle text-text-main font-medium py-2 px-3 rounded-lg inline-flex items-center gap-2 text-sm"><CodeBracketIcon className="w-5 h-5" /><span>{artifact.title}</span></button>)}</div>}
                                     </div>

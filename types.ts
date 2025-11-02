@@ -20,6 +20,11 @@ export interface Attachment {
   data: string; // base64 data url
 }
 
+export interface MessageOption {
+  text: string;
+  prompt: string;
+}
+
 export interface ChatMessage {
   id: string;
   author: MessageAuthor;
@@ -35,6 +40,7 @@ export interface ChatMessage {
   consoleLogs?: string[];
   fromAdmin?: boolean; // Flag for admin-sent messages
   essayContent?: Essay; // The entire essay object is now part of the message
+  options?: MessageOption[];
 }
 
 export interface Chat {

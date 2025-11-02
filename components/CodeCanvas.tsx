@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Artifact } from '../types';
-import { XMarkIcon, DocumentDuplicateIcon, WindowIcon, DevicePhoneMobileIcon, DeviceTabletIcon, ComputerDesktopIcon, InformationCircleIcon } from './icons';
+import { XMarkIcon, DocumentDuplicateIcon, WindowIcon, DevicePhoneMobileIcon, DeviceTabletIcon, ComputerDesktopIcon, InformationCircleIcon, CodeBracketIcon, CheckIcon } from './icons';
 
 const highlightCode = (code: string, language: string) => {
   if (language !== 'html') {
@@ -17,16 +17,52 @@ const highlightCode = (code: string, language: string) => {
   highlighted = highlighted.replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="token comment">$1</span>');
   
   // Tags
-  highlighted = highlighted.replace(/(&lt;\/?)([a-zA-Z0-9]+)/g, '$1<span class="token tag">$2</span>');
+  highlighted = highlighted.replace(/(&lt;\/?)([a-zA-Z0-9\-]+)/g, '$1<span class="token tag">$2</span>');
 
   // Attributes
-  highlighted = highlighted.replace(/([a-zA-Z-]+)=(".*?"|'.*?')/g, '<span class="token attr-name">$1</span>=<span class="token attr-value">$2</span>');
+  highlighted = highlighted.replace(/([a-zA-Z\-:]+)=(".*?"|'.*?')/g, '<span class="token attr-name">$1</span>=<span class="token attr-value">$2</span>');
+  
+  // Style and script content
+  highlighted = highlighted.replace(/(&lt;style&gt;[\s\S]*?&lt;\/style&gt;|&lt;script&gt;[\s\S]*?&lt;\/script&gt;)/g, (match) => {
+      return match.replace(/([a-zA-Z-]+)(?=:)/g, '<span class="token property">$1</span>')
+                  .replace(/(:\s*)([^;]+)/g, '$1<span class="token value">$2</span>')
+                  .replace(/(\b)(function|var|let|const|return|if|else|for|while)(\b)/g, '$1<span class="token keyword">$2</span>$3');
+  });
 
   // Doctypes
   highlighted = highlighted.replace(/(&lt;!DOCTYPE html&gt;)/i, '<span class="token doctype">$1</span>');
 
   return highlighted;
 };
+
+const DeviceFrame: React.FC<{ viewport: 'desktop' | 'tablet' | 'mobile', children: React.ReactNode }> = ({ viewport, children }) => {
+    const baseClasses = "bg-white shadow-2xl rounded-lg transition-all duration-300 ease-in-out flex flex-col";
+    const frameStyles = {
+        mobile: "w-[375px] h-[667px] border-8 border-black rounded-[40px] p-2",
+        tablet: "w-[768px] h-[1024px] border-[14px] border-black rounded-[24px] p-2",
+        desktop: "w-full h-full border border-border-subtle rounded-xl",
+    };
+
+    if (viewport === 'desktop') {
+        return (
+            <div className={`${baseClasses} ${frameStyles.desktop}`}>
+                <div className="flex-shrink-0 h-10 bg-surface-secondary rounded-t-lg border-b border-border-subtle flex items-center px-4 gap-2">
+                    <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                    <span className="w-3 h-3 bg-yellow-400 rounded-full"></span>
+                    <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+                </div>
+                <div className="flex-1 overflow-hidden">{children}</div>
+            </div>
+        )
+    }
+
+    return (
+        <div className={`${baseClasses} ${frameStyles[viewport]}`}>
+            <div className="flex-1 overflow-hidden rounded-lg">{children}</div>
+        </div>
+    );
+};
+
 
 const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ artifact, onClose }) => {
   const [view, setView] = useState<'preview' | 'code' | 'info'>('preview');
@@ -50,23 +86,17 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
     }
   };
   
-  const viewportSizes = {
-    mobile: 'w-[375px] h-[667px]',
-    tablet: 'w-[768px] h-[1024px]',
-    desktop: 'w-full h-full',
-  };
-
   const lineNumbers = useMemo(() => artifact.code.split('\n').map((_, i) => i + 1), [artifact.code]);
 
   return (
     <div className="fixed inset-0 bg-bg-main/50 backdrop-blur-sm z-50 flex items-center justify-center p-0 md:p-4 animate-fade-in-up">
-        <div className="bg-surface-primary w-full h-full md:max-w-6xl md:h-full md:max-h-[90vh] rounded-none md:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-border-subtle">
+        <div className="bg-surface-primary w-full h-full md:max-w-7xl md:h-full md:max-h-[95vh] rounded-none md:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-border-subtle">
             {/* Header */}
             <header className="relative flex-shrink-0 flex items-center justify-between p-2 sm:p-3 border-b border-border-subtle bg-surface-primary z-10">
                 <div className="flex items-center gap-2 flex-1">
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-surface-secondary transition-colors">
-                        <XMarkIcon className="w-6 h-6 text-text-secondary" />
-                    </button>
+                    <div className="p-2 bg-accent/10 rounded-lg">
+                        <CodeBracketIcon className="w-5 h-5 text-accent" />
+                    </div>
                     <h2 className="font-semibold text-text-main truncate">{artifact.title}</h2>
                 </div>
                 
@@ -86,11 +116,15 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
                             <button onClick={() => setViewport('desktop')} className={`p-1.5 rounded-md ${viewport === 'desktop' ? 'bg-accent text-white' : 'text-text-secondary hover:bg-border-subtle'}`} title="Desktop"><ComputerDesktopIcon className="w-5 h-5" /></button>
                         </div>
                     )}
-                    <button onClick={handleCopy} className="p-2 rounded-full hover:bg-surface-secondary transition-colors" title="Copiar código">
-                       <DocumentDuplicateIcon className={`w-5 h-5 ${copied ? 'text-green-500' : 'text-text-secondary'}`} />
+                    <button onClick={handleCopy} className={`flex items-center gap-2 p-2 rounded-lg transition-colors text-sm font-medium ${copied ? 'bg-green-500/10 text-green-500' : 'bg-surface-secondary hover:bg-border-subtle text-text-secondary hover:text-text-main'}`}>
+                       {copied ? <CheckIcon className="w-5 h-5" /> : <DocumentDuplicateIcon className="w-5 h-5" />}
+                       {copied ? 'Copiado' : 'Copiar'}
                     </button>
-                    <button onClick={handlePopOut} className="p-2 rounded-full hover:bg-surface-secondary transition-colors" title="Abrir en nueva ventana">
+                    <button onClick={handlePopOut} className="p-2 rounded-lg hover:bg-surface-secondary transition-colors" title="Abrir en nueva ventana">
                         <WindowIcon className="w-5 h-5 text-text-secondary" />
+                    </button>
+                     <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-secondary transition-colors">
+                        <XMarkIcon className="w-6 h-6 text-text-secondary" />
                     </button>
                 </div>
             </header>
@@ -98,9 +132,9 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
             {/* Main Content */}
             <main className="flex-1 overflow-hidden bg-bg-main relative">
                 {view === 'code' && (
-                    <div className="h-full overflow-auto code-view bg-[#1e1e1e]">
-                        <div className="flex font-mono text-sm p-4 sticky top-0">
-                            <div className="text-right text-gray-500 select-none pr-4">
+                    <div className="h-full overflow-auto code-view">
+                        <div className="flex font-mono text-sm p-4 text-left">
+                            <div className="text-right text-gray-500 select-none pr-4 sticky top-0">
                                 {lineNumbers.map(n => <div key={n}>{n}</div>)}
                             </div>
                             <pre className="flex-1 whitespace-pre-wrap break-words">
@@ -110,30 +144,30 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
                     </div>
                 )}
                 {view === 'preview' && (
-                    <div className="h-full w-full flex items-center justify-center bg-dots p-4">
-                        <div className={`bg-white shadow-2xl rounded-lg transition-all duration-300 ease-in-out ${viewportSizes[viewport]}`}>
+                    <div className="h-full w-full flex items-center justify-center bg-grid p-4 overflow-auto">
+                        <DeviceFrame viewport={viewport}>
                              <iframe
                                 srcDoc={artifact.code}
                                 title="Artifact Preview"
                                 className="w-full h-full border-0 rounded-lg"
                                 sandbox="allow-scripts allow-same-origin"
                             />
-                        </div>
+                        </DeviceFrame>
                     </div>
                 )}
                 {view === 'info' && (
                     <div className="h-full w-full flex items-center justify-center p-8">
                         <div className="max-w-lg w-full bg-surface-primary p-8 rounded-lg border border-border-subtle">
-                             <h3 className="text-2xl font-bold text-text-main flex items-center gap-3 mb-4">
+                             <h3 className="text-2xl font-bold text-text-main flex items-center gap-3 mb-6">
                                 <InformationCircleIcon className="w-8 h-8 text-accent"/>
                                 <span>Detalles del Artefacto</span>
                              </h3>
-                             <div className="space-y-3 text-text-secondary">
-                                <p><strong>Título:</strong> <span className="font-mono bg-surface-secondary px-2 py-1 rounded">{artifact.title}</span></p>
-                                <p><strong>Lenguaje:</strong> <span className="font-mono bg-surface-secondary px-2 py-1 rounded">{artifact.language}</span></p>
-                                <p><strong>Líneas de código:</strong> <span className="font-mono bg-surface-secondary px-2 py-1 rounded">{lineNumbers.length}</span></p>
+                             <div className="space-y-4 text-text-secondary">
+                                <div className="flex justify-between items-center"><span className="font-semibold">Título:</span> <span className="font-mono bg-surface-secondary px-2 py-1 rounded">{artifact.title}</span></div>
+                                <div className="flex justify-between items-center"><span className="font-semibold">Lenguaje:</span> <span className="font-mono bg-surface-secondary px-2 py-1 rounded">{artifact.language}</span></div>
+                                <div className="flex justify-between items-center"><span className="font-semibold">Líneas de código:</span> <span className="font-mono bg-surface-secondary px-2 py-1 rounded">{lineNumbers.length}</span></div>
                              </div>
-                             <p className="text-sm text-text-secondary mt-6">Este artefacto fue generado por SAM para ser visualizado e interactuado dentro de este entorno de desarrollo.</p>
+                             <p className="text-sm text-text-secondary mt-8">Este artefacto fue generado por SAM para ser visualizado e interactuado dentro de este entorno de desarrollo.</p>
                         </div>
                     </div>
                 )}
@@ -141,22 +175,26 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
         </div>
         <style>{`
             :root {
-                --code-bg: #1e1e1e;
-                --code-text: #d4d4d4;
+                --code-bg: #1e1f20;
                 --token-comment: #6a9955;
                 --token-tag: #569cd6;
                 --token-attr-name: #9cdcfe;
                 --token-attr-value: #ce9178;
                 --token-doctype: #4ec9b0;
+                --token-property: #d7ba7d;
+                --token-value: #ce9178;
+                --token-keyword: #c586c0;
             }
             @keyframes fade-in-up {
                 from { opacity: 0; transform: translateY(20px) scale(0.98); }
                 to { opacity: 1; transform: translateY(0) scale(1); }
             }
             .animate-fade-in-up {
-                animation: fade-in-up 0.2s ease-out forwards;
+                animation: fade-in-up 0.3s ease-out forwards;
             }
             .code-view {
+                background-color: var(--code-bg);
+                font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
                 scrollbar-color: var(--color-text-secondary) transparent;
                 scrollbar-width: thin;
             }
@@ -164,9 +202,12 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
             .code-view::-webkit-scrollbar-track { background: transparent; }
             .code-view::-webkit-scrollbar-thumb { background-color: var(--color-border-subtle); border-radius: 20px; border: 2px solid transparent; background-clip: content-box; }
             .code-view::-webkit-scrollbar-thumb:hover { background-color: var(--color-text-secondary); }
-            .bg-dots {
-                background-image: radial-gradient(var(--color-border-subtle) 1px, transparent 1px);
-                background-size: 16px 16px;
+            .bg-grid {
+                background-color: var(--color-bg-main);
+                background-image:
+                    linear-gradient(var(--color-border-subtle) 1px, transparent 1px),
+                    linear-gradient(to right, var(--color-border-subtle) 1px, transparent 1px);
+                background-size: 20px 20px;
             }
             /* Syntax Highlighting */
             .token.comment { color: var(--token-comment); }
@@ -174,6 +215,9 @@ const CodeCanvas: React.FC<{ artifact: Artifact; onClose: () => void; }> = ({ ar
             .token.attr-name { color: var(--token-attr-name); }
             .token.attr-value { color: var(--token-attr-value); }
             .token.doctype { color: var(--token-doctype); }
+            .token.property { color: var(--token-property); }
+            .token.value { color: var(--token-value); }
+            .token.keyword { color: var(--token-keyword); }
         `}</style>
     </div>
   );
